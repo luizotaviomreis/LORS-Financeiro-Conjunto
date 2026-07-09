@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>LORS — Financeiro Conjunto</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<style>
+:root {
+  --ink:       #0f0e11;
+  --paper:     #f5f3ee;
+  --paper2:    #edeae3;
+  --border:    #d4cfc5;
+  --muted:     #7a7570;
+  --r:         6px;
+  --shadow:    0 2px 12px rgba(15,14,17,.08);
+  --font-head: 'Syne', sans-serif;
+  --font-mono: 'DM Mono', monospace;
+  /* cores empresa */
+  --t-color:   #2d4a8a;
+  --t-lt:      #eef2fb;
+  --m-color:   #1a6b45;
+  --m-lt:      #e8f5ef;
+  --p-color:   #6b3fa0;
+  --p-lt:      #f3edfb;
+  /* status */
+  --green:     #1a6b45;
+  --green-lt:  #e8f5ef;
+  --red:       #b72b2b;
+  --red-lt:    #fdeaea;
+  --yellow:    #e8a020;
+  --yellow-lt: #fef8ec;
+  /* sidebar */
+  --sb-bg:     #0f1f15;
+  --sb-accent: #1a4d2e;
+  --sb-text:   #c8ddd0;
+  --sb-active: #4caf82;
+  --sb-w:      220px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--font-mono);font-size:13px;min-height:100vh}
+
+/* ── AUTH ─────────────────────────────────── */
+#authScreen{display:flex;align-items:center;justify-content:center;min-height:100vh;background:var(--sb-bg)}
+.auth-box{background:#fff;border-radius:12px;padding:40px 36px;text-align:center;max-width:360px;width:90%}
+.auth-logo{font-family:var(--font-head);font-size:22px;font-weight:800;color:var(--sb-bg);margin-bottom:4px}
+.auth-sub{font-size:11px;color:var(--muted);margin-bottom:28px}
+.btn-google{display:inline-flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:10px 20px;font-family:var(--font-mono);font-size:13px;cursor:pointer;transition:.15s}
+.btn-google:hover{background:var(--paper)}
+.btn-google svg{width:18px;height:18px}
+#pendingMsg{display:none;margin-top:20px;padding:12px;background:var(--yellow-lt);border:1px solid #f0c040;border-radius:var(--r);font-size:12px;color:#7a5800}
+#blockedMsg{display:none;margin-top:20px;padding:12px;background:var(--red-lt);border:1px solid #f0a0a0;border-radius:var(--r);font-size:12px;color:var(--red)}
+
+/* ── LAYOUT ───────────────────────────────── */
+#app{display:none}
+.layout{display:flex;min-height:100vh}
+.sidebar{width:var(--sb-w);background:var(--sb-bg);display:flex;flex-direction:column;position:fixed;top:0;left:0;height:100vh;z-index:100}
+.sb-header{padding:20px 16px 12px;border-bottom:1px solid rgba(255,255,255,.08)}
+.sb-logo{font-family:var(--font-head);font-size:17px;font-weight:800;color:#fff;line-height:1.1}
+.sb-logo span{color:var(--sb-active)}
+.sb-tagline{font-size:10px;color:var(--sb-text);opacity:.7;margin-top:3px}
+.sb-nav{flex:1;padding:12px 0;overflow-y:auto}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 16px;color:var(--sb-text);cursor:pointer;border-radius:0;transition:.15s;font-size:12px;border-left:3px solid transparent}
+.nav-item:hover{background:rgba(255,255,255,.06);color:#fff}
+.nav-item.active{background:rgba(76,175,130,.12);color:var(--sb-active);border-left-color:var(--sb-active)}
+.nav-item svg{width:15px;height:15px;opacity:.8;flex-shrink:0}
+.sb-section{font-size:9px;color:var(--sb-text);opacity:.4;text-transform:uppercase;letter-spacing:.08em;padding:14px 16px 4px}
+.sb-footer{padding:12px 16px;border-top:1px solid rgba(255,255,255,.08)}
+.sb-user{display:flex;align-items:center;gap:8px}
+.sb-avatar{width:28px;height:28px;border-radius:50%;object-fit:cover;background:var(--sb-accent)}
+.sb-name{font-size:11px;color:var(--sb-text);line-height:1.2;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sb-role{font-size:9px;color:var(--sb-active);margin-top:1px}
+.btn-signout{background:none;border:none;color:var(--sb-text);cursor:pointer;font-size:11px;opacity:.6;padding:2px}
+.btn-signout:hover{opacity:1}
+.main{margin-left:var(--sb-w);flex:1;display:flex;flex-direction:column;min-height:100vh}
+.topbar{background:#fff;border-bottom:1px solid var(--border);padding:12px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
+.topbar-title{font-family:var(--font-head);font-size:15px;font-weight:700}
+.content{padding:24px;flex:1}
+
+/* ── KPI CARDS ────────────────────────────── */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:24px}
+.kpi{background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:14px 16px}
+.kpi-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+.kpi-val{font-size:20px;font-weight:500;font-family:var(--font-head);line-height:1}
+.kpi-sub{font-size:10px;color:var(--muted);margin-top:4px}
+.kpi.t{border-top:3px solid var(--t-color)}
+.kpi.m{border-top:3px solid var(--m-color)}
+.kpi.c{border-top:3px solid var(--p-color)}
+.kpi.pos .kpi-val{color:var(--green)}
+.kpi.neg .kpi-val{color:var(--red)}
+
+/* ── FILTROS ──────────────────────────────── */
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;align-items:center}
+.filters select,.filters input{border:1px solid var(--border);border-radius:var(--r);padding:6px 10px;font-family:var(--font-mono);font-size:12px;background:#fff;color:var(--ink)}
+.filters select:focus,.filters input:focus{outline:none;border-color:var(--p-color)}
+.badge-emp{font-size:10px;padding:2px 8px;border-radius:20px;font-weight:500;white-space:nowrap}
+.badge-t{background:var(--t-lt);color:var(--t-color)}
+.badge-m{background:var(--m-lt);color:var(--m-color)}
+.badge-c{background:var(--p-lt);color:var(--p-color)}
+.badge-ok{background:var(--green-lt);color:var(--green)}
+.badge-warn{background:var(--yellow-lt);color:var(--yellow)}
+
+/* ── TABELAS ──────────────────────────────── */
+.table-wrap{overflow-x:auto;background:#fff;border:1px solid var(--border);border-radius:var(--r)}
+table{width:100%;border-collapse:collapse}
+th{background:var(--paper2);font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:8px 12px;text-align:left;font-weight:500;white-space:nowrap}
+td{padding:9px 12px;border-top:1px solid var(--border);font-size:12px;vertical-align:middle}
+tr:hover td{background:var(--paper)}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.pos{color:var(--green)}
+.neg{color:var(--red)}
+.neu{color:var(--muted)}
+
+/* ── DRE ──────────────────────────────────── */
+.dre-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px}
+.dre-col{background:#fff;border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+.dre-head{padding:12px 16px;font-family:var(--font-head);font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px}
+.dre-head.t{background:var(--t-lt);color:var(--t-color)}
+.dre-head.m{background:var(--m-lt);color:var(--m-color)}
+.dre-head.c{background:var(--p-lt);color:var(--p-color)}
+.dre-row{display:flex;justify-content:space-between;padding:8px 16px;border-top:1px solid var(--border);font-size:12px}
+.dre-row.total{background:var(--paper2);font-weight:500}
+.dre-row.elim{opacity:.5;font-style:italic}
+.dre-row.elim .neg{text-decoration:line-through}
+.dre-row.elim .pos{text-decoration:line-through}
+.dre-lbl{color:var(--muted)}
+
+/* ── SALDO BAR ─────────────────────────────── */
+.saldo-bar-wrap{height:10px;background:var(--paper2);border-radius:5px;overflow:hidden;margin-top:8px;display:flex}
+.saldo-bar-t{background:var(--t-color);height:10px;transition:.4s}
+.saldo-bar-m{background:var(--m-color);height:10px;transition:.4s}
+
+/* ── LOADING ───────────────────────────────── */
+#loadingScreen{display:none;position:fixed;inset:0;background:var(--sb-bg);z-index:999;align-items:center;justify-content:center;flex-direction:column;gap:16px}
+.loading-logo{font-family:var(--font-head);font-size:28px;font-weight:800;color:#fff}
+.loading-logo span{color:var(--sb-active)}
+.loading-dots{display:flex;gap:6px}
+.loading-dots div{width:8px;height:8px;border-radius:50%;background:var(--sb-active);animation:pulse 1.2s ease-in-out infinite}
+.loading-dots div:nth-child(2){animation-delay:.2s}
+.loading-dots div:nth-child(3){animation-delay:.4s}
+@keyframes pulse{0%,80%,100%{opacity:.2;transform:scale(.8)}40%{opacity:1;transform:scale(1)}}
+
+/* ── TOAST ─────────────────────────────────── */
+#toastContainer{position:fixed;bottom:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px}
+.toast{padding:10px 16px;border-radius:var(--r);color:#fff;font-size:12px;animation:fadeIn .25s;max-width:300px}
+.toast.success{background:#1a6b45}
+.toast.error{background:#b72b2b}
+.toast.info{background:#2d4a8a}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── PÁGINA ────────────────────────────────── */
+.page{display:none}
+.page.active{display:block}
+.section-title{font-family:var(--font-head);font-size:14px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.section-title .pill{font-size:10px;padding:2px 8px;border-radius:20px;background:var(--paper2);color:var(--muted);font-family:var(--font-mono);font-weight:400}
+</style>
+</head>
+<body>
+
+<!-- Loading -->
+<div id="loadingScreen" style="display:flex">
+  <div class="loading-logo">LORS <span>Conjunto</span></div>
+  <div class="loading-dots"><div></div><div></div><div></div></div>
+</div>
+
+<!-- Auth -->
+<div id="authScreen" style="display:none">
+  <div class="auth-box">
+    <div class="auth-logo">LORS <span style="color:var(--m-color)">Conjunto</span></div>
+    <div class="auth-sub">Financeiro consolidado · Transportes + Madeiras</div>
+    <button class="btn-google" onclick="loginGoogle()">
+      <svg viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+      Entrar com Google
+    </button>
+    <div id="pendingMsg">Acesso pendente de aprovação. Entre em contato com o administrador.</div>
+    <div id="blockedMsg">Seu acesso está bloqueado. Entre em contato com o administrador.</div>
+  </div>
+</div>
+
+<!-- App -->
+<div id="app">
+  <div class="layout">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sb-header">
+        <div class="sb-logo">LORS <span>Conjunto</span></div>
+        <div class="sb-tagline">Transportes · Madeiras · Conta única</div>
+      </div>
+      <nav class="sb-nav">
+        <div class="sb-section">Visão geral</div>
+        <div class="nav-item active" id="navDashboard" onclick="showPage('dashboard')">
+          <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" d="M3 13h4v7H3zm6-6h4v13H9zm6 3h4v10h-4z"/></svg>
+          Dashboard
+        </div>
+        <div class="nav-item" id="navExtrato" onclick="showPage('extrato')">
+          <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+          Extrato unificado
+        </div>
+        <div class="sb-section">Análise</div>
+        <div class="nav-item" id="navDRE" onclick="showPage('dre')">
+          <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" d="M9 17v-2m3 2v-4m3 4v-6M5 21h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+          DRE consolidado
+        </div>
+        <div class="nav-item" id="navVinculadas" onclick="showPage('vinculadas')">
+          <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
+          Operações vinculadas
+        </div>
+      </nav>
+      <div class="sb-footer">
+        <div class="sb-user">
+          <img class="sb-avatar" id="navAvatar" src="" alt="">
+          <div style="flex:1;min-width:0">
+            <div class="sb-name" id="navUserName"></div>
+            <div class="sb-role">Administrador</div>
+          </div>
+          <button class="btn-signout" onclick="auth.signOut()" title="Sair">✕</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <div class="main">
+      <div class="topbar">
+        <div class="topbar-title" id="pageTitle">Dashboard</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span class="badge-emp badge-t">Transportes</span>
+          <span style="color:var(--muted);font-size:11px">+</span>
+          <span class="badge-emp badge-m">Madeiras</span>
+          <button onclick="carregarDados()" style="background:none;border:1px solid var(--border);border-radius:var(--r);padding:4px 10px;cursor:pointer;font-size:11px;font-family:var(--font-mono)" id="btnRecarregar">↺ Atualizar</button>
+        </div>
+      </div>
+      <div class="content">
+
+        <!-- DASHBOARD -->
+        <div class="page active" id="pageDashboard">
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;align-items:center">
+            <select id="dashMes" onchange="renderDashboard()" style="border:1px solid var(--border);border-radius:var(--r);padding:6px 10px;font-family:var(--font-mono);font-size:12px;background:#fff"></select>
+            <select id="dashAno" onchange="renderDashboard()" style="border:1px solid var(--border);border-radius:var(--r);padding:6px 10px;font-family:var(--font-mono);font-size:12px;background:#fff"></select>
+          </div>
+
+          <!-- Saldo da conta -->
+          <div class="section-title">Saldo estimado da conta <span class="pill" id="dashPeriodo"></span></div>
+          <div style="background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:20px;margin-bottom:24px">
+            <div style="display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap">
+              <div>
+                <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Resultado líquido consolidado</div>
+                <div style="font-family:var(--font-head);font-size:32px;font-weight:800;line-height:1.1;margin-top:4px" id="dashSaldoTotal">—</div>
+              </div>
+              <div style="flex:1;min-width:200px">
+                <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px">
+                  <span style="color:var(--t-color)">■ Transportes <span id="dashSaldoT">—</span></span>
+                  <span style="color:var(--m-color)">■ Madeiras <span id="dashSaldoM">—</span></span>
+                </div>
+                <div class="saldo-bar-wrap">
+                  <div class="saldo-bar-t" id="dashBarT" style="width:50%"></div>
+                  <div class="saldo-bar-m" id="dashBarM" style="width:50%"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="kpi-grid" id="dashKpis"></div>
+
+          <!-- Últimas movimentações -->
+          <div class="section-title">Últimas movimentações <span class="pill" id="dashCountMovs"></span></div>
+          <div class="table-wrap" id="dashMovsTable"></div>
+        </div>
+
+        <!-- EXTRATO -->
+        <div class="page" id="pageExtrato">
+          <div class="filters">
+            <select id="extEmpresa" onchange="renderExtrato()">
+              <option value="">Todas as empresas</option>
+              <option value="T">Transportes</option>
+              <option value="M">Madeiras</option>
+            </select>
+            <select id="extTipo" onchange="renderExtrato()">
+              <option value="">Entradas e saídas</option>
+              <option value="entrada">Entradas</option>
+              <option value="saida">Saídas</option>
+            </select>
+            <select id="extMes" onchange="renderExtrato()"></select>
+            <select id="extAno" onchange="renderExtrato()"></select>
+            <span style="font-size:11px;color:var(--muted)" id="extTotal"></span>
+          </div>
+          <div class="table-wrap" id="extratoTable"></div>
+        </div>
+
+        <!-- DRE -->
+        <div class="page" id="pageDRE">
+          <div class="filters">
+            <select id="dreMes" onchange="renderDRE()"></select>
+            <select id="dreAno" onchange="renderDRE()"></select>
+          </div>
+          <div class="dre-grid" id="dreGrid"></div>
+          <div class="section-title" style="margin-top:8px">Como funciona a eliminação interempresa</div>
+          <div style="background:var(--yellow-lt);border:1px solid #f0c040;border-radius:var(--r);padding:14px 16px;font-size:12px;color:#7a5800;line-height:1.7">
+            Quando uma carga de madeira é transportada pela LORS Transportes, o frete aparece como <strong>custo na Madeiras</strong> e como <strong>receita na Transportes</strong>.
+            No consolidado, esses valores se cancelam — o que resta é o resultado real da operação sem dupla contagem.
+          </div>
+        </div>
+
+        <!-- VINCULADAS -->
+        <div class="page" id="pageVinculadas">
+          <div class="filters">
+            <select id="vinMes" onchange="renderVinculadas()"></select>
+            <select id="vinAno" onchange="renderVinculadas()"></select>
+            <span style="font-size:11px;color:var(--muted)" id="vinCount"></span>
+          </div>
+          <div class="table-wrap" id="vinculadasTable"></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toastContainer"></div>
+
+<script>
+// ── FIREBASE ──────────────────────────────────────────────────────
+const firebaseConfig = {
+  apiKey:            "AIzaSyBS-5KmteYrFMyGpdiJR95qu2smdhOIaFo",
+  authDomain:        "lors-transportes.firebaseapp.com",
+  projectId:         "lors-transportes",
+  storageBucket:     "lors-transportes.appspot.com",
+  messagingSenderId: "794583889613",
+  appId:             "1:794583889613:web:4f68f3e56e7c7c2a3b9e4d"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db   = firebase.firestore();
+const ADMIN_EMAIL = 'luizotaviomreis@gmail.com';
+
+// ── DADOS ─────────────────────────────────────────────────────────
+let dadosT = { lancamentos: [], faturamentos: [] };   // Transportes
+let dadosM = { entradas: [], saidas: [], pagamentos: [], recebimentos: [] }; // Madeiras
+let carregando = false;
+
+// ── AUTH ──────────────────────────────────────────────────────────
+function loginGoogle() {
+  const p = new firebase.auth.GoogleAuthProvider();
+  auth.signInWithPopup(p).catch(e => toast(e.message, 'error'));
+}
+
+auth.onAuthStateChanged(async user => {
+  document.getElementById('loadingScreen').style.display = 'none';
+  if (!user) {
+    document.getElementById('authScreen').style.display = 'flex';
+    document.getElementById('app').style.display = 'none';
+    return;
+  }
+  // Admin sempre entra
+  if (user.email === ADMIN_EMAIL) {
+    iniciarApp(user);
+    return;
+  }
+  // Verifica acesso no mad_users (mesmo projeto)
+  const ref = db.collection('mad_users').doc(user.uid);
+  const snap = await ref.get();
+  if (!snap.exists) {
+    await ref.set({ email: user.email, name: user.displayName, status: 'pending', createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+    document.getElementById('authScreen').style.display = 'flex';
+    document.getElementById('pendingMsg').style.display = 'block';
+    return;
+  }
+  const status = snap.data().status;
+  if (status === 'blocked') {
+    document.getElementById('authScreen').style.display = 'flex';
+    document.getElementById('blockedMsg').style.display = 'block';
+    return;
+  }
+  if (status !== 'approved') {
+    document.getElementById('authScreen').style.display = 'flex';
+    document.getElementById('pendingMsg').style.display = 'block';
+    return;
+  }
+  iniciarApp(user);
+});
+
+function iniciarApp(user) {
+  document.getElementById('authScreen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  document.getElementById('navAvatar').src = user.photoURL || '';
+  document.getElementById('navUserName').textContent = user.displayName || user.email;
+  popularFiltros();
+  carregarDados();
+}
+
+// ── CARGA DE DADOS ────────────────────────────────────────────────
+async function carregarDados() {
+  if (carregando) return;
+  carregando = true;
+  document.getElementById('btnRecarregar').textContent = '↻ Carregando…';
+  try {
+    // Transportes — appdata/main
+    const snapT = await db.collection('appdata').doc('main').get();
+    if (snapT.exists) {
+      const d = snapT.data();
+      dadosT.lancamentos   = d.lancamentos   || [];
+      dadosT.faturamentos  = d.faturamentos  || [];
+    }
+    // Madeiras — coleções individuais
+    const [snapE, snapS, snapP, snapR] = await Promise.all([
+      db.collection('mad_entradas').get(),
+      db.collection('mad_saidas').get(),
+      db.collection('mad_pagamentos').get(),
+      db.collection('mad_recebimentos').get(),
+    ]);
+    dadosM.entradas      = snapE.docs.map(d => ({ id: d.id, ...d.data() }));
+    dadosM.saidas        = snapS.docs.map(d => ({ id: d.id, ...d.data() }));
+    dadosM.pagamentos    = snapP.docs.map(d => ({ id: d.id, ...d.data() }));
+    dadosM.recebimentos  = snapR.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    renderDashboard();
+    renderExtrato();
+    renderDRE();
+    renderVinculadas();
+    toast('Dados atualizados', 'success');
+  } catch(e) {
+    toast('Erro ao carregar: ' + e.message, 'error');
+  } finally {
+    carregando = false;
+    document.getElementById('btnRecarregar').textContent = '↺ Atualizar';
+  }
+}
+
+// ── HELPERS ───────────────────────────────────────────────────────
+const R$ = v => 'R$ ' + Number(v||0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const pct = (a, b) => b === 0 ? 0 : Math.round(a / b * 100);
+
+function mesAno(dateStr) {
+  if (!dateStr) return { mes: 0, ano: 0 };
+  const d = new Date(dateStr + 'T00:00:00');
+  return { mes: d.getMonth() + 1, ano: d.getFullYear() };
+}
+
+function filtroMesAno(dateStr, mes, ano) {
+  if (!mes && !ano) return true;
+  const d = mesAno(dateStr);
+  return (!mes || d.mes === +mes) && (!ano || d.ano === +ano);
+}
+
+// Retorna todos os movimentos normalizados (Transportes + Madeiras)
+function todosMovimentos() {
+  const movs = [];
+
+  // Transportes: lancamentos
+  for (const l of dadosT.lancamentos) {
+    movs.push({
+      data: l.data,
+      desc: l.descricao,
+      tipo: l.tipo === 'receita' ? 'entrada' : 'saida',
+      valor: +l.valor || 0,
+      empresa: 'T',
+      cat: l.categoria || '',
+      origem: 'lancamento',
+      ref: l,
+    });
+  }
+
+  // Madeiras: entradas
+  for (const e of dadosM.entradas) {
+    movs.push({
+      data: e.data,
+      desc: e.fornecedor + (e.especie ? ` — ${e.especie}` : ''),
+      tipo: 'entrada',
+      valor: +e.valMadeiraTotal || 0,
+      empresa: 'M',
+      cat: 'venda madeira',
+      origem: 'entrada',
+      ref: e,
+    });
+  }
+
+  // Madeiras: saidas (frete ao cliente = receita da Transportes internamente, mas aqui é custo da Madeiras)
+  for (const s of dadosM.saidas) {
+    movs.push({
+      data: s.data,
+      desc: (s.destino || '') + (s.caminhao ? ` · ${s.caminhao}` : ''),
+      tipo: 'saida',
+      valor: +s.valFreteTotal || 0,
+      empresa: 'M',
+      cat: 'frete (interempresa)',
+      origem: 'saida_frete',
+      interempresa: true,
+      ref: s,
+    });
+    // custo madeira (compra)
+    if ((+s.valMadeiraTotal || 0) > 0) {
+      movs.push({
+        data: s.data,
+        desc: 'Custo madeira — ' + (s.especie || ''),
+        tipo: 'saida',
+        valor: +s.valMadeiraTotal || 0,
+        empresa: 'M',
+        cat: 'custo madeira',
+        origem: 'saida_madeira',
+        ref: s,
+      });
+    }
+  }
+
+  // Madeiras: pagamentos
+  for (const p of dadosM.pagamentos) {
+    movs.push({
+      data: p.data,
+      desc: p.parceiro || p.referencia || '—',
+      tipo: 'saida',
+      valor: +p.valor || 0,
+      empresa: 'M',
+      cat: p.referencia || 'pagamento',
+      origem: 'pagamento',
+      ref: p,
+    });
+  }
+
+  // Madeiras: recebimentos
+  for (const r of dadosM.recebimentos) {
+    movs.push({
+      data: r.data,
+      desc: r.parceiro || r.referencia || '—',
+      tipo: 'entrada',
+      valor: +r.valor || 0,
+      empresa: 'M',
+      cat: r.referencia || 'recebimento',
+      origem: 'recebimento',
+      ref: r,
+    });
+  }
+
+  return movs.sort((a, b) => (b.data || '').localeCompare(a.data || ''));
+}
+
+// Operações vinculadas (carga Madeiras ↔ faturamento Transportes via data+caminhao)
+function operacoesVinculadas() {
+  const result = [];
+  for (const s of dadosM.saidas) {
+    const fatKey = s.fatKey || (s.data && s.caminhao ? `${s.data}|${s.caminhao}` : null);
+    if (!fatKey) continue;
+    const [fData, fCam] = fatKey.split('|');
+    const fat = dadosT.faturamentos.find(f =>
+      f.data === fData && (f.caminhao || '').toLowerCase() === (fCam || '').toLowerCase()
+    );
+    result.push({ saida: s, faturamento: fat || null, fatKey });
+  }
+  return result;
+}
+
+// Cálculo DRE por período
+function calcDRE(mes, ano) {
+  const filt = d => filtroMesAno(d, mes, ano);
+
+  // TRANSPORTES
+  const tEntradas = dadosT.lancamentos.filter(l => l.tipo === 'receita' && filt(l.data))
+    .reduce((s, l) => s + (+l.valor || 0), 0);
+  const tSaidas = dadosT.lancamentos.filter(l => l.tipo !== 'receita' && filt(l.data))
+    .reduce((s, l) => s + (+l.valor || 0), 0);
+  // Faturamentos que têm carga vinculada = interempresa (receita interna)
+  const tFatVinc = dadosT.faturamentos.filter(f => {
+    if (!filt(f.data)) return false;
+    return dadosM.saidas.some(s => {
+      const fatKey = s.fatKey || (s.data && s.caminhao ? `${s.data}|${s.caminhao}` : null);
+      if (!fatKey) return false;
+      const [fd, fc] = fatKey.split('|');
+      return f.data === fd && (f.caminhao||'').toLowerCase() === (fc||'').toLowerCase();
+    });
+  }).reduce((s, f) => s + (+f.total || 0), 0);
+
+  // MADEIRAS
+  const mReceitas = dadosM.entradas.filter(e => filt(e.data))
+    .reduce((s, e) => s + (+e.valMadeiraTotal || 0), 0);
+  const mReceb = dadosM.recebimentos.filter(r => filt(r.data) && r.status === 'recebido')
+    .reduce((s, r) => s + (+r.valor || 0), 0);
+  const mFreteCusto = dadosM.saidas.filter(s => filt(s.data))
+    .reduce((s, e) => s + (+e.valFreteTotal || 0), 0);
+  const mOutrosCustos = dadosM.pagamentos.filter(p => filt(p.data) && p.status === 'pago')
+    .reduce((s, p) => s + (+p.valor || 0), 0);
+
+  // Frete interempresa = mFreteCusto (custo na Mad) = tFatVinc (receita na Transp)
+  // No consolidado, eliminamos os dois
+  const elimValor = Math.min(mFreteCusto, tFatVinc);
+
+  const tRes = tEntradas - tSaidas;
+  const mRes = (mReceitas + mReceb) - mFreteCusto - mOutrosCustos;
+  const cRes = tEntradas - tSaidas - elimValor + mReceitas + mReceb - mOutrosCustos;
+
+  return { tEntradas, tSaidas, tFatVinc, tRes, mReceitas, mReceb, mFreteCusto, mOutrosCustos, mRes, elimValor, cRes };
+}
+
+// ── FILTROS POPULARES ─────────────────────────────────────────────
+function popularFiltros() {
+  const anos = new Set();
+  const meses = [
+    { v:'', l:'Todos os meses' },
+    { v:1, l:'Janeiro' },{ v:2, l:'Fevereiro' },{ v:3, l:'Março' },
+    { v:4, l:'Abril' },{ v:5, l:'Maio' },{ v:6, l:'Junho' },
+    { v:7, l:'Julho' },{ v:8, l:'Agosto' },{ v:9, l:'Setembro' },
+    { v:10, l:'Outubro' },{ v:11, l:'Novembro' },{ v:12, l:'Dezembro' },
+  ];
+  const now = new Date();
+  for (let y = now.getFullYear(); y >= 2025; y--) anos.add(y);
+
+  ['dashMes','extMes','dreMes','vinMes'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.innerHTML = meses.map(m => `<option value="${m.v}">${m.l}</option>`).join('');
+    if (id !== 'dashMes') el.value = '';
+    else el.value = now.getMonth() + 1;
+  });
+  ['dashAno','extAno','dreAno','vinAno'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.innerHTML = `<option value="">Todos os anos</option>` +
+      [...anos].map(y => `<option value="${y}">${y}</option>`).join('');
+    el.value = now.getFullYear();
+  });
+}
+
+// ── RENDER DASHBOARD ──────────────────────────────────────────────
+function renderDashboard() {
+  const mes = document.getElementById('dashMes').value;
+  const ano = document.getElementById('dashAno').value;
+  const dre = calcDRE(mes, ano);
+
+  const mesNome = mes ? document.getElementById('dashMes').options[+mes].text : 'Todos';
+  document.getElementById('dashPeriodo').textContent = mesNome + (ano ? ' / ' + ano : '');
+
+  const total = dre.tRes + dre.mRes;
+  document.getElementById('dashSaldoTotal').textContent = R$(total);
+  document.getElementById('dashSaldoTotal').style.color = total >= 0 ? 'var(--green)' : 'var(--red)';
+  document.getElementById('dashSaldoT').textContent = R$(dre.tRes);
+  document.getElementById('dashSaldoM').textContent = R$(dre.mRes);
+
+  const absTotal = Math.abs(dre.tRes) + Math.abs(dre.mRes) || 1;
+  document.getElementById('dashBarT').style.width = pct(Math.max(0, dre.tRes), absTotal) + '%';
+  document.getElementById('dashBarM').style.width = pct(Math.max(0, dre.mRes), absTotal) + '%';
+
+  document.getElementById('dashKpis').innerHTML = `
+    <div class="kpi t">
+      <div class="kpi-label">Entradas Transportes</div>
+      <div class="kpi-val pos">${R$(dre.tEntradas)}</div>
+      <div class="kpi-sub">Receitas de frete</div>
+    </div>
+    <div class="kpi t ${dre.tSaidas > dre.tEntradas ? 'neg' : ''}">
+      <div class="kpi-label">Saídas Transportes</div>
+      <div class="kpi-val neg">${R$(dre.tSaidas)}</div>
+      <div class="kpi-sub">Custos operacionais</div>
+    </div>
+    <div class="kpi m">
+      <div class="kpi-label">Receitas Madeiras</div>
+      <div class="kpi-val pos">${R$(dre.mReceitas + dre.mReceb)}</div>
+      <div class="kpi-sub">Vendas + recebimentos</div>
+    </div>
+    <div class="kpi m">
+      <div class="kpi-label">Custos Madeiras</div>
+      <div class="kpi-val neg">${R$(dre.mFreteCusto + dre.mOutrosCustos)}</div>
+      <div class="kpi-sub">Frete + pagamentos</div>
+    </div>
+    <div class="kpi c ${dre.elimValor > 0 ? '' : 'neu'}">
+      <div class="kpi-label">Eliminação interempresa</div>
+      <div class="kpi-val neu">${R$(dre.elimValor)}</div>
+      <div class="kpi-sub">Frete cancelado no consolid.</div>
+    </div>
+    <div class="kpi c ${dre.cRes >= 0 ? 'pos' : 'neg'}">
+      <div class="kpi-label">Resultado consolidado</div>
+      <div class="kpi-val ${dre.cRes >= 0 ? 'pos' : 'neg'}">${R$(dre.cRes)}</div>
+      <div class="kpi-sub">Após eliminação</div>
+    </div>
+  `;
+
+  // Últimas movimentações
+  const filt = d => filtroMesAno(d, mes, ano);
+  const movs = todosMovimentos().filter(m => filt(m.data)).slice(0, 20);
+  document.getElementById('dashCountMovs').textContent = movs.length + ' registros';
+  document.getElementById('dashMovsTable').innerHTML = tabelaMovimentos(movs);
+}
+
+// ── RENDER EXTRATO ────────────────────────────────────────────────
+function renderExtrato() {
+  const emp  = document.getElementById('extEmpresa').value;
+  const tipo = document.getElementById('extTipo').value;
+  const mes  = document.getElementById('extMes').value;
+  const ano  = document.getElementById('extAno').value;
+
+  let movs = todosMovimentos().filter(m =>
+    (!emp  || m.empresa === emp) &&
+    (!tipo || m.tipo === tipo) &&
+    filtroMesAno(m.data, mes, ano)
+  );
+
+  const totalEnt = movs.filter(m => m.tipo === 'entrada').reduce((s, m) => s + m.valor, 0);
+  const totalSai = movs.filter(m => m.tipo === 'saida').reduce((s, m) => s + m.valor, 0);
+  document.getElementById('extTotal').textContent =
+    `Entradas: ${R$(totalEnt)} · Saídas: ${R$(totalSai)} · Líquido: ${R$(totalEnt - totalSai)}`;
+
+  document.getElementById('extratoTable').innerHTML = tabelaMovimentos(movs, true);
+}
+
+function tabelaMovimentos(movs, showCat = false) {
+  if (!movs.length) return '<div style="padding:24px;text-align:center;color:var(--muted)">Nenhum registro no período</div>';
+  return `<table>
+    <thead><tr>
+      <th>Data</th>
+      <th>Descrição</th>
+      <th>Empresa</th>
+      ${showCat ? '<th>Categoria</th>' : ''}
+      <th class="num">Valor</th>
+    </tr></thead>
+    <tbody>
+      ${movs.map(m => `<tr>
+        <td>${m.data || '—'}</td>
+        <td>${m.desc || '—'}${m.interempresa ? ' <span class="badge-emp badge-warn" style="font-size:9px">interempresa</span>' : ''}</td>
+        <td><span class="badge-emp badge-${m.empresa === 'T' ? 't' : 'm'}">${m.empresa === 'T' ? 'Transportes' : 'Madeiras'}</span></td>
+        ${showCat ? `<td><span style="color:var(--muted);font-size:11px">${m.cat}</span></td>` : ''}
+        <td class="num ${m.tipo === 'entrada' ? 'pos' : 'neg'}">${m.tipo === 'entrada' ? '+' : '-'}${R$(m.valor)}</td>
+      </tr>`).join('')}
+    </tbody>
+  </table>`;
+}
+
+// ── RENDER DRE ────────────────────────────────────────────────────
+function renderDRE() {
+  const mes = document.getElementById('dreMes').value;
+  const ano = document.getElementById('dreAno').value;
+  const dre = calcDRE(mes, ano);
+
+  document.getElementById('dreGrid').innerHTML = `
+    <div class="dre-col">
+      <div class="dre-head t">Transportes</div>
+      <div class="dre-row"><span class="dre-lbl">Receitas</span><span class="pos">${R$(dre.tEntradas)}</span></div>
+      <div class="dre-row"><span class="dre-lbl">Custos operacionais</span><span class="neg">(${R$(dre.tSaidas)})</span></div>
+      <div class="dre-row elim"><span class="dre-lbl">Faturamento interempresa</span><span class="pos" title="Cancelado no consolidado">${R$(dre.tFatVinc)}</span></div>
+      <div class="dre-row total"><span>Resultado</span><span class="${dre.tRes >= 0 ? 'pos' : 'neg'}">${R$(dre.tRes)}</span></div>
+    </div>
+    <div class="dre-col">
+      <div class="dre-head m">Madeiras</div>
+      <div class="dre-row"><span class="dre-lbl">Vendas madeira</span><span class="pos">${R$(dre.mReceitas)}</span></div>
+      <div class="dre-row"><span class="dre-lbl">Outros recebimentos</span><span class="pos">${R$(dre.mReceb)}</span></div>
+      <div class="dre-row elim"><span class="dre-lbl">Custo frete (interempresa)</span><span class="neg" title="Cancelado no consolidado">(${R$(dre.mFreteCusto)})</span></div>
+      <div class="dre-row"><span class="dre-lbl">Outros custos</span><span class="neg">(${R$(dre.mOutrosCustos)})</span></div>
+      <div class="dre-row total"><span>Resultado</span><span class="${dre.mRes >= 0 ? 'pos' : 'neg'}">${R$(dre.mRes)}</span></div>
+    </div>
+    <div class="dre-col">
+      <div class="dre-head c">Consolidado</div>
+      <div class="dre-row"><span class="dre-lbl">Receitas totais</span><span class="pos">${R$(dre.tEntradas + dre.mReceitas + dre.mReceb)}</span></div>
+      <div class="dre-row"><span class="dre-lbl">Custos totais</span><span class="neg">(${R$(dre.tSaidas + dre.mOutrosCustos)})</span></div>
+      <div class="dre-row"><span class="dre-lbl">Eliminação interempresa</span><span class="neu">± ${R$(dre.elimValor)}</span></div>
+      <div class="dre-row total"><span>Resultado líquido</span><span class="${dre.cRes >= 0 ? 'pos' : 'neg'}">${R$(dre.cRes)}</span></div>
+    </div>
+  `;
+}
+
+// ── RENDER VINCULADAS ─────────────────────────────────────────────
+function renderVinculadas() {
+  const mes = document.getElementById('vinMes').value;
+  const ano = document.getElementById('vinAno').value;
+
+  const vinc = operacoesVinculadas().filter(v => filtroMesAno(v.saida.data, mes, ano));
+  document.getElementById('vinCount').textContent = vinc.length + ' operações vinculadas';
+
+  if (!vinc.length) {
+    document.getElementById('vinculadasTable').innerHTML =
+      '<div style="padding:24px;text-align:center;color:var(--muted)">Nenhuma operação vinculada no período</div>';
+    return;
+  }
+
+  document.getElementById('vinculadasTable').innerHTML = `<table>
+    <thead><tr>
+      <th>Data</th>
+      <th>Caminhão</th>
+      <th>Destino (Mad.)</th>
+      <th class="num">Frete (Madeiras)</th>
+      <th class="num">Faturamento (Transp.)</th>
+      <th class="num">Diferença</th>
+      <th>Status</th>
+    </tr></thead>
+    <tbody>
+      ${vinc.map(v => {
+        const freteMad = +v.saida.valFreteTotal || 0;
+        const fatTransp = v.faturamento ? (+v.faturamento.total || 0) : 0;
+        const diff = fatTransp - freteMad;
+        const ok = v.faturamento !== null;
+        return `<tr>
+          <td>${v.saida.data || '—'}</td>
+          <td>${v.saida.caminhao || '—'}</td>
+          <td>${v.saida.destino || '—'}</td>
+          <td class="num neg">(${R$(freteMad)})</td>
+          <td class="num pos">${ok ? R$(fatTransp) : '<span class="neu">não encontrado</span>'}</td>
+          <td class="num ${Math.abs(diff) < 0.01 ? 'neu' : diff > 0 ? 'pos' : 'neg'}">${ok ? R$(diff) : '—'}</td>
+          <td><span class="badge-emp ${ok ? 'badge-ok' : 'badge-warn'}">${ok ? '✓ vinculado' : '⚠ sem fat.'}</span></td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+  </table>`;
+}
+
+// ── NAVEGAÇÃO ─────────────────────────────────────────────────────
+const pageTitles = { dashboard:'Dashboard', extrato:'Extrato unificado', dre:'DRE consolidado', vinculadas:'Operações vinculadas' };
+function showPage(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page' + page.charAt(0).toUpperCase() + page.slice(1)).classList.add('active');
+  document.getElementById('nav' + page.charAt(0).toUpperCase() + page.slice(1)).classList.add('active');
+  document.getElementById('pageTitle').textContent = pageTitles[page] || page;
+}
+
+// ── TOAST ─────────────────────────────────────────────────────────
+function toast(msg, type = 'info') {
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.textContent = msg;
+  document.getElementById('toastContainer').appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+</script>
+</body>
+</html>
