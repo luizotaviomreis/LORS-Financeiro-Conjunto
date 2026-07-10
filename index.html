@@ -476,33 +476,8 @@ function todosMovimentos() {
     });
   }
 
-  // Madeiras: saidas (frete ao cliente = receita da Transportes internamente, mas aqui é custo da Madeiras)
-  for (const s of dadosM.saidas) {
-    movs.push({
-      data: s.data,
-      desc: (s.destino || '') + (s.caminhao ? ` · ${s.caminhao}` : ''),
-      tipo: 'saida',
-      valor: +s.valFreteTotal || 0,
-      empresa: 'M',
-      cat: 'frete (interempresa)',
-      origem: 'saida_frete',
-      interempresa: true,
-      ref: s,
-    });
-    // custo madeira (compra)
-    if ((+s.valMadeiraTotal || 0) > 0) {
-      movs.push({
-        data: s.data,
-        desc: 'Custo madeira — ' + (s.especie || ''),
-        tipo: 'saida',
-        valor: +s.valMadeiraTotal || 0,
-        empresa: 'M',
-        cat: 'custo madeira',
-        origem: 'saida_madeira',
-        ref: s,
-      });
-    }
-  }
+  // Madeiras: saidas — frete é referência interna, não entra no extrato financeiro
+  // O frete já está capturado como receita nos lançamentos da Transportes
 
   // Madeiras: pagamentos
   for (const p of dadosM.pagamentos) {
@@ -580,15 +555,12 @@ function calcDRE(mes, ano) {
   const mOutrosCustos = dadosM.pagamentos.filter(p => filt(p.data) && p.status === 'pago')
     .reduce((s, p) => s + (+p.valor || 0), 0);
 
-  // Frete interempresa = mFreteCusto (custo na Mad) = tFatVinc (receita na Transp)
-  // No consolidado, eliminamos os dois
-  const elimValor = Math.min(mFreteCusto, tFatVinc);
-
+  // Frete não é custo da Madeiras — já está como receita da Transportes
   const tRes = tEntradas - tSaidas;
-  const mRes = (mReceitas + mReceb) - mFreteCusto - mOutrosCustos;
-  const cRes = tEntradas - tSaidas - elimValor + mReceitas + mReceb - mOutrosCustos;
+  const mRes = (mReceitas + mReceb) - mOutrosCustos;
+  const cRes = tRes + mRes;
 
-  return { tEntradas, tSaidas, tFatVinc, tRes, mReceitas, mReceb, mFreteCusto, mOutrosCustos, mRes, elimValor, cRes };
+  return { tEntradas, tSaidas, tRes, mReceitas, mReceb, mOutrosCustos, mRes, cRes };
 }
 
 // ── FILTROS POPULARES ─────────────────────────────────────────────
@@ -645,7 +617,7 @@ function renderDashboard() {
       <div class="kpi-val pos">${R$(dre.tEntradas)}</div>
       <div class="kpi-sub">Receitas de frete</div>
     </div>
-    <div class="kpi t ${dre.tSaidas > dre.tEntradas ? 'neg' : ''}">
+    <div class="kpi t">
       <div class="kpi-label">Saídas Transportes</div>
       <div class="kpi-val neg">${R$(dre.tSaidas)}</div>
       <div class="kpi-sub">Custos operacionais</div>
@@ -657,18 +629,18 @@ function renderDashboard() {
     </div>
     <div class="kpi m">
       <div class="kpi-label">Custos Madeiras</div>
-      <div class="kpi-val neg">${R$(dre.mFreteCusto + dre.mOutrosCustos)}</div>
-      <div class="kpi-sub">Frete + pagamentos</div>
+      <div class="kpi-val neg">${R$(dre.mOutrosCustos)}</div>
+      <div class="kpi-sub">Colheita, carregamento, outros</div>
     </div>
-    <div class="kpi c ${dre.elimValor > 0 ? '' : 'neu'}">
-      <div class="kpi-label">Eliminação interempresa</div>
-      <div class="kpi-val neu">${R$(dre.elimValor)}</div>
-      <div class="kpi-sub">Frete cancelado no consolid.</div>
+    <div class="kpi t">
+      <div class="kpi-label">Resultado Transportes</div>
+      <div class="kpi-val ${dre.tRes >= 0 ? 'pos' : 'neg'}">${R$(dre.tRes)}</div>
+      <div class="kpi-sub">Entradas − Saídas</div>
     </div>
     <div class="kpi c ${dre.cRes >= 0 ? 'pos' : 'neg'}">
       <div class="kpi-label">Resultado consolidado</div>
       <div class="kpi-val ${dre.cRes >= 0 ? 'pos' : 'neg'}">${R$(dre.cRes)}</div>
-      <div class="kpi-sub">Após eliminação</div>
+      <div class="kpi-sub">Transportes + Madeiras</div>
     </div>
   `;
 
@@ -731,24 +703,21 @@ function renderDRE() {
   document.getElementById('dreGrid').innerHTML = `
     <div class="dre-col">
       <div class="dre-head t">Transportes</div>
-      <div class="dre-row"><span class="dre-lbl">Receitas</span><span class="pos">${R$(dre.tEntradas)}</span></div>
+      <div class="dre-row"><span class="dre-lbl">Receitas de frete</span><span class="pos">${R$(dre.tEntradas)}</span></div>
       <div class="dre-row"><span class="dre-lbl">Custos operacionais</span><span class="neg">(${R$(dre.tSaidas)})</span></div>
-      <div class="dre-row elim"><span class="dre-lbl">Faturamento interempresa</span><span class="pos" title="Cancelado no consolidado">${R$(dre.tFatVinc)}</span></div>
       <div class="dre-row total"><span>Resultado</span><span class="${dre.tRes >= 0 ? 'pos' : 'neg'}">${R$(dre.tRes)}</span></div>
     </div>
     <div class="dre-col">
       <div class="dre-head m">Madeiras</div>
       <div class="dre-row"><span class="dre-lbl">Vendas madeira</span><span class="pos">${R$(dre.mReceitas)}</span></div>
       <div class="dre-row"><span class="dre-lbl">Outros recebimentos</span><span class="pos">${R$(dre.mReceb)}</span></div>
-      <div class="dre-row elim"><span class="dre-lbl">Custo frete (interempresa)</span><span class="neg" title="Cancelado no consolidado">(${R$(dre.mFreteCusto)})</span></div>
-      <div class="dre-row"><span class="dre-lbl">Outros custos</span><span class="neg">(${R$(dre.mOutrosCustos)})</span></div>
+      <div class="dre-row"><span class="dre-lbl">Custos (colheita, carreg., outros)</span><span class="neg">(${R$(dre.mOutrosCustos)})</span></div>
       <div class="dre-row total"><span>Resultado</span><span class="${dre.mRes >= 0 ? 'pos' : 'neg'}">${R$(dre.mRes)}</span></div>
     </div>
     <div class="dre-col">
       <div class="dre-head c">Consolidado</div>
       <div class="dre-row"><span class="dre-lbl">Receitas totais</span><span class="pos">${R$(dre.tEntradas + dre.mReceitas + dre.mReceb)}</span></div>
       <div class="dre-row"><span class="dre-lbl">Custos totais</span><span class="neg">(${R$(dre.tSaidas + dre.mOutrosCustos)})</span></div>
-      <div class="dre-row"><span class="dre-lbl">Eliminação interempresa</span><span class="neu">± ${R$(dre.elimValor)}</span></div>
       <div class="dre-row total"><span>Resultado líquido</span><span class="${dre.cRes >= 0 ? 'pos' : 'neg'}">${R$(dre.cRes)}</span></div>
     </div>
   `;
