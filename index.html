@@ -444,11 +444,11 @@ function filtroMesAno(dateStr, mes, ano) {
   return (!mes || d.mes === +mes) && (!ano || d.ano === +ano);
 }
 
-// Retorna todos os movimentos normalizados (Transportes + Madeiras)
+// Retorna todos os movimentos financeiros reais (apenas o que passa na conta bancária)
 function todosMovimentos() {
   const movs = [];
 
-  // Transportes: lancamentos
+  // Transportes: lançamentos (receitas e saídas reais da conta)
   for (const l of dadosT.lancamentos) {
     movs.push({
       data: l.data,
@@ -457,29 +457,12 @@ function todosMovimentos() {
       valor: +l.valor || 0,
       empresa: 'T',
       cat: l.categoria || '',
-      origem: 'lancamento',
       ref: l,
     });
   }
 
-  // Madeiras: entradas
-  for (const e of dadosM.entradas) {
-    movs.push({
-      data: e.data,
-      desc: e.fornecedor + (e.especie ? ` — ${e.especie}` : ''),
-      tipo: 'entrada',
-      valor: +e.valMadeiraTotal || 0,
-      empresa: 'M',
-      cat: 'venda madeira',
-      origem: 'entrada',
-      ref: e,
-    });
-  }
-
-  // Madeiras: saidas — frete é referência interna, não entra no extrato financeiro
-  // O frete já está capturado como receita nos lançamentos da Transportes
-
-  // Madeiras: pagamentos
+  // Madeiras: apenas pagamentos e recebimentos (movimentos bancários reais)
+  // mad_entradas e mad_saidas são controle operacional — não entram aqui
   for (const p of dadosM.pagamentos) {
     movs.push({
       data: p.data,
@@ -488,12 +471,10 @@ function todosMovimentos() {
       valor: +p.valor || 0,
       empresa: 'M',
       cat: p.referencia || 'pagamento',
-      origem: 'pagamento',
       ref: p,
     });
   }
 
-  // Madeiras: recebimentos
   for (const r of dadosM.recebimentos) {
     movs.push({
       data: r.data,
@@ -502,7 +483,6 @@ function todosMovimentos() {
       valor: +r.valor || 0,
       empresa: 'M',
       cat: r.referencia || 'recebimento',
-      origem: 'recebimento',
       ref: r,
     });
   }
@@ -525,42 +505,27 @@ function operacoesVinculadas() {
   return result;
 }
 
-// Cálculo DRE por período
+// Cálculo DRE por período — apenas movimentos financeiros reais da conta
 function calcDRE(mes, ano) {
   const filt = d => filtroMesAno(d, mes, ano);
 
-  // TRANSPORTES
+  // TRANSPORTES: lançamentos reais
   const tEntradas = dadosT.lancamentos.filter(l => l.tipo === 'receita' && filt(l.data))
     .reduce((s, l) => s + (+l.valor || 0), 0);
   const tSaidas = dadosT.lancamentos.filter(l => l.tipo !== 'receita' && filt(l.data))
     .reduce((s, l) => s + (+l.valor || 0), 0);
-  // Faturamentos que têm carga vinculada = interempresa (receita interna)
-  const tFatVinc = dadosT.faturamentos.filter(f => {
-    if (!filt(f.data)) return false;
-    return dadosM.saidas.some(s => {
-      const fatKey = s.fatKey || (s.data && s.caminhao ? `${s.data}|${s.caminhao}` : null);
-      if (!fatKey) return false;
-      const [fd, fc] = fatKey.split('|');
-      return f.data === fd && (f.caminhao||'').toLowerCase() === (fc||'').toLowerCase();
-    });
-  }).reduce((s, f) => s + (+f.total || 0), 0);
 
-  // MADEIRAS
-  const mReceitas = dadosM.entradas.filter(e => filt(e.data))
-    .reduce((s, e) => s + (+e.valMadeiraTotal || 0), 0);
-  const mReceb = dadosM.recebimentos.filter(r => filt(r.data) && r.status === 'recebido')
+  // MADEIRAS: apenas pagamentos e recebimentos bancários
+  const mReceb = dadosM.recebimentos.filter(r => filt(r.data))
     .reduce((s, r) => s + (+r.valor || 0), 0);
-  const mFreteCusto = dadosM.saidas.filter(s => filt(s.data))
-    .reduce((s, e) => s + (+e.valFreteTotal || 0), 0);
-  const mOutrosCustos = dadosM.pagamentos.filter(p => filt(p.data) && p.status === 'pago')
+  const mPag = dadosM.pagamentos.filter(p => filt(p.data))
     .reduce((s, p) => s + (+p.valor || 0), 0);
 
-  // Frete não é custo da Madeiras — já está como receita da Transportes
   const tRes = tEntradas - tSaidas;
-  const mRes = (mReceitas + mReceb) - mOutrosCustos;
+  const mRes = mReceb - mPag;
   const cRes = tRes + mRes;
 
-  return { tEntradas, tSaidas, tRes, mReceitas, mReceb, mOutrosCustos, mRes, cRes };
+  return { tEntradas, tSaidas, tRes, mReceb, mPag, mRes, cRes };
 }
 
 // ── FILTROS POPULARES ─────────────────────────────────────────────
@@ -623,21 +588,21 @@ function renderDashboard() {
       <div class="kpi-sub">Custos operacionais</div>
     </div>
     <div class="kpi m">
-      <div class="kpi-label">Receitas Madeiras</div>
-      <div class="kpi-val pos">${R$(dre.mReceitas + dre.mReceb)}</div>
-      <div class="kpi-sub">Vendas + recebimentos</div>
+      <div class="kpi-label">Recebimentos Madeiras</div>
+      <div class="kpi-val pos">${R$(dre.mReceb)}</div>
+      <div class="kpi-sub">Entradas na conta</div>
     </div>
     <div class="kpi m">
-      <div class="kpi-label">Custos Madeiras</div>
-      <div class="kpi-val neg">${R$(dre.mOutrosCustos)}</div>
-      <div class="kpi-sub">Colheita, carregamento, outros</div>
+      <div class="kpi-label">Pagamentos Madeiras</div>
+      <div class="kpi-val neg">${R$(dre.mPag)}</div>
+      <div class="kpi-sub">Saídas da conta</div>
     </div>
     <div class="kpi t">
       <div class="kpi-label">Resultado Transportes</div>
       <div class="kpi-val ${dre.tRes >= 0 ? 'pos' : 'neg'}">${R$(dre.tRes)}</div>
       <div class="kpi-sub">Entradas − Saídas</div>
     </div>
-    <div class="kpi c ${dre.cRes >= 0 ? 'pos' : 'neg'}">
+    <div class="kpi c">
       <div class="kpi-label">Resultado consolidado</div>
       <div class="kpi-val ${dre.cRes >= 0 ? 'pos' : 'neg'}">${R$(dre.cRes)}</div>
       <div class="kpi-sub">Transportes + Madeiras</div>
@@ -703,21 +668,20 @@ function renderDRE() {
   document.getElementById('dreGrid').innerHTML = `
     <div class="dre-col">
       <div class="dre-head t">Transportes</div>
-      <div class="dre-row"><span class="dre-lbl">Receitas de frete</span><span class="pos">${R$(dre.tEntradas)}</span></div>
-      <div class="dre-row"><span class="dre-lbl">Custos operacionais</span><span class="neg">(${R$(dre.tSaidas)})</span></div>
+      <div class="dre-row"><span class="dre-lbl">Entradas</span><span class="pos">${R$(dre.tEntradas)}</span></div>
+      <div class="dre-row"><span class="dre-lbl">Saídas</span><span class="neg">(${R$(dre.tSaidas)})</span></div>
       <div class="dre-row total"><span>Resultado</span><span class="${dre.tRes >= 0 ? 'pos' : 'neg'}">${R$(dre.tRes)}</span></div>
     </div>
     <div class="dre-col">
       <div class="dre-head m">Madeiras</div>
-      <div class="dre-row"><span class="dre-lbl">Vendas madeira</span><span class="pos">${R$(dre.mReceitas)}</span></div>
-      <div class="dre-row"><span class="dre-lbl">Outros recebimentos</span><span class="pos">${R$(dre.mReceb)}</span></div>
-      <div class="dre-row"><span class="dre-lbl">Custos (colheita, carreg., outros)</span><span class="neg">(${R$(dre.mOutrosCustos)})</span></div>
+      <div class="dre-row"><span class="dre-lbl">Recebimentos</span><span class="pos">${R$(dre.mReceb)}</span></div>
+      <div class="dre-row"><span class="dre-lbl">Pagamentos</span><span class="neg">(${R$(dre.mPag)})</span></div>
       <div class="dre-row total"><span>Resultado</span><span class="${dre.mRes >= 0 ? 'pos' : 'neg'}">${R$(dre.mRes)}</span></div>
     </div>
     <div class="dre-col">
       <div class="dre-head c">Consolidado</div>
-      <div class="dre-row"><span class="dre-lbl">Receitas totais</span><span class="pos">${R$(dre.tEntradas + dre.mReceitas + dre.mReceb)}</span></div>
-      <div class="dre-row"><span class="dre-lbl">Custos totais</span><span class="neg">(${R$(dre.tSaidas + dre.mOutrosCustos)})</span></div>
+      <div class="dre-row"><span class="dre-lbl">Total entradas</span><span class="pos">${R$(dre.tEntradas + dre.mReceb)}</span></div>
+      <div class="dre-row"><span class="dre-lbl">Total saídas</span><span class="neg">(${R$(dre.tSaidas + dre.mPag)})</span></div>
       <div class="dre-row total"><span>Resultado líquido</span><span class="${dre.cRes >= 0 ? 'pos' : 'neg'}">${R$(dre.cRes)}</span></div>
     </div>
   `;
