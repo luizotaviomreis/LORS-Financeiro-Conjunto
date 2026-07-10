@@ -733,12 +733,14 @@ function renderVinculadas() {
 
 // ── NAVEGAÇÃO ─────────────────────────────────────────────────────
 const pageTitles = { dashboard:'Dashboard', extrato:'Extrato unificado', dre:'DRE consolidado', vinculadas:'Operações vinculadas' };
+const pageRenders = { dashboard: renderDashboard, extrato: renderExtrato, dre: renderDRE, vinculadas: renderVinculadas };
 function showPage(page) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('page' + page.charAt(0).toUpperCase() + page.slice(1)).classList.add('active');
   document.getElementById('nav' + page.charAt(0).toUpperCase() + page.slice(1)).classList.add('active');
   document.getElementById('pageTitle').textContent = pageTitles[page] || page;
+  if (pageRenders[page]) pageRenders[page]();
 }
 
 // ── TOAST ─────────────────────────────────────────────────────────
